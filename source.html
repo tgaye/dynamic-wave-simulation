@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Wave Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a2e;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(30, 30, 60, 0.85);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            font-family: Arial, sans-serif;
+            max-width: 250px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+        }
+        #controls h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        button {
+            background-color: #4a4e69;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        button:hover {
+            background-color: #5a5e79;
+        }
+        #toggle-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 101;
+            background-color: rgba(30, 30, 60, 0.9);
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        .value-display {
+            font-size: 11px;
+            color: #ccc;
+            text-align: right;
+        }
+    </style>
+
+<base target="_self">
+
+
+    <div id="controls">
+        <h3>Wave Controls</h3>
+        <div class="control-group">
+            <label for="waveHeight">Wave Height</label>
+            <input type="range" id="waveHeight" min="10" max="150" value="80">
+            <div class="value-display" id="waveHeightValue">80</div>
+        </div>
+        <div class="control-group">
+            <label for="waveSpeed">Wave Speed</label>
+            <input type="range" id="waveSpeed" min="0.1" max="2" step="0.1" value="0.8">
+            <div class="value-display" id="waveSpeedValue">0.8</div>
+        </div>
+        <div class="control-group">
+            <label for="waveTension">Curve Tension</label>
+            <input type="range" id="waveTension" min="0.1" max="1" step="0.1" value="0.5">
+            <div class="value-display" id="waveTensionValue">0.5</div>
+        </div>
+        <div class="control-group">
+            <label for="surferCount">Surfer Count (1-10)</label>
+            <input type="range" id="surferCount" min="1" max="10" value="3">
+            <div class="value-display" id="surferCountValue">3</div>
+        </div>
+        <button id="sunsetToggle">Sunset Mode: ON</button>
+        <button id="resetBtn">Reset Waves</button>
+    </div>
+    <button id="toggle-btn">Hide Controls</button>
+
+    <script>
+        const sketch = (p) => {
+            let wavePoints = [];
+            let surfers = [];
+            let sunsetMode = true;
+            let waveHeight = 80;
+            let waveSpeed = 0.8;
+            let waveTension = 0.5;
+            let surferCount = 3;
+            let time = 0;
+            let waveSeed;
+            let bgGradient;
+            let controlsVisible = true;
+            const MAX_SURFERS = 10;
+            const WAVE_POINTS = 100;
+
+            p.setup = () => {
+                const canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+                canvas.position(0, 0);
+                waveSeed = p.random(1000);
+                
+                // Initialize wave points
+                for (let i = 0; i <= WAVE_POINTS; i++) {
+                    wavePoints.push({
+                        x: p.map(i, 0, WAVE_POINTS, 0, p.width),
+                        y: p.height * 0.7
+                    });
+                }
+                
+                // Initialize surfers
+                createSurfers();
+                
+                // Setup event listeners for controls
+                setupControls();
+                
+                // Create off-screen graphics for background
+                bgGradient = p.createGraphics(p.width, p.height);
+                drawBackground(bgGradient);
+            };
+
+            function setupControls() {
+                const waveHeightSlider = document.getElementById('waveHeight');
+                const waveSpeedSlider = document.getElementById('waveSpeed');
+                const waveTensionSlider = document.getElementById('waveTension');
+                const surferCountSlider = document.getElementById('surferCount');
+                const sunsetToggle = document.getElementById('sunsetToggle');
+                const resetBtn = document.getElementById('resetBtn');
+                const toggleBtn = document.getElementById('toggle-btn');
+                
+                waveHeightSlider.addEventListener('input', (e) => {
+                    waveHeight = parseInt(e.target.value);
+                    document.getElementById('waveHeightValue').textContent = waveHeight;
+                });
+                
+                waveSpeedSlider.addEventListener('input', (e) => {
+                    waveSpeed = parseFloat(e.target.value);
+                    document.getElementById('waveSpeedValue').textContent = waveSpeed;
+                });
+                
+                waveTensionSlider.addEventListener('input', (e) => {
+                    waveTension = parseFloat(e.target.value);
+                    document.getElementById('waveTensionValue').textContent = waveTension;
+                });
+                
+                surferCountSlider.addEventListener('input', (e) => {
+                    surferCount = parseInt(e.target.value);
+                    document.getElementById('surferCountValue').textContent = surferCount;
+                    createSurfers();
+                });
+                
+                sunsetToggle.addEventListener('click', () => {
+                    sunsetMode = !sunsetMode;
+                    sunsetToggle.textContent = `Sunset Mode: ${sunsetMode ? 'ON' : 'OFF'}`;
+                    drawBackground(bgGradient);
+                });
+                
+                resetBtn.addEventListener('click', () => {
+                    waveSeed = p.random(1000);
+                    time = 0;
+                });
+                
+                toggleBtn.addEventListener('click', () => {
+                    controlsVisible = !controlsVisible;
+                    document.getElementById('controls').style.display = controlsVisible ? 'block' : 'none';
+                    toggleBtn.textContent = controlsVisible ? 'Hide Controls' : 'Show Controls';
+                });
+                
+                // Set initial values
+                document.getElementById('waveHeightValue').textContent = waveHeight;
+                document.getElementById('waveSpeedValue').textContent = waveSpeed;
+                document.getElementById('waveTensionValue').textContent = waveTension;
+                document.getElementById('surferCountValue').textContent = surferCount;
+            }
+
+            function createSurfers() {
+                surfers = [];
+                for (let i = 0; i < Math.min(surferCount, MAX_SURFERS); i++) {
+                    surfers.push({
+                        x: p.random(p.width * 0.2, p.width * 0.8),
+                        y: p.height * 0.6,
+                        size: p.random(15, 25),
+                        color: p.color(p.random(150, 255), p.random(150, 255), p.random(150, 255)),
+                        speed: p.random(0.5, 1.5),
+                        angle: 0,
+                        waveOffset: p.random(1000)
+                    });
+                }
+            }
+
+            function drawBackground(g) {
+                if (sunsetMode) {
+                    // Sunset gradient
+                    for (let y = 0; y < g.height; y++) {
+                        let inter = p.map(y, 0, g.height, 0, 1);
+                        let c = p.lerpColor(
+                            p.color(253, 94, 83),
+                            p.color(58, 12, 163),
+                            inter
+                        );
+                        g.stroke(c);
+                        g.line(0, y, g.width, y);
+                    }
+                } else {
+                    // Daytime gradient
+                    for (let y = 0; y < g.height; y++) {
+                        let inter = p.map(y, 0, g.height, 0, 1);
+                        let c = p.lerpColor(
+                            p.color(135, 206, 235),
+                            p.color(30, 144, 255),
+                            inter
+                        );
+                        g.stroke(c);
+                        g.line(0, y, g.width, y);
+                    }
+                }
+            }
+
+            p.draw = () => {
+                // Draw background
+                p.image(bgGradient, 0, 0);
+                
+                // Update wave
+                updateWave();
+                
+                // Draw wave
+                drawWave();
+                
+                // Update and draw surfers
+                updateSurfers();
+                drawSurfers();
+                
+                // Increment time
+                time += 0.01 * waveSpeed;
+            };
+
+            function updateWave() {
+                for (let i = 0; i < wavePoints.length; i++) {
+                    const normX = p.map(i, 0, wavePoints.length - 1, 0, 1);
+                    const noiseVal = p.noise(waveSeed + normX * 3, time);
+                    
+                    // Base y position with noise
+                    let baseY = p.height * 0.7;
+                    let waveY = baseY - noiseVal * waveHeight;
+                    
+                    // Add mouse influence
+                    const mouseDist = p.dist(wavePoints[i].x, waveY, p.mouseX, p.mouseY);
+                    if (mouseDist < 150) {
+                        const influence = p.map(mouseDist, 0, 150, -50, 0);
+                        waveY += influence;
+                    }
+                    
+                    // Apply easing to wave points for smoother movement
+                    wavePoints[i].y = p.lerp(wavePoints[i].y, waveY, waveTension);
+                }
+            }
+
+            function drawWave() {
+                p.noFill();
+                p.beginShape();
+                
+                // Start point
+                p.curveVertex(0, p.height);
+                p.curveVertex(0, wavePoints[0].y);
+                
+                // Wave points
+                for (let i = 0; i < wavePoints.length; i++) {
+                    p.curveVertex(wavePoints[i].x, wavePoints[i].y);
+                }
+                
+                // End point
+                p.curveVertex(p.width, wavePoints[wavePoints.length - 1].y);
+                p.curveVertex(p.width, p.height);
+                
+                // Fill with semi-transparent color
+                if (sunsetMode) {
+                    p.fill(58, 12, 163, 100);
+                } else {
+                    p.fill(30, 144, 255, 100);
+                }
+ p.endShape(p.CLOSE);
+                
+                // Wave highlights
+                p.stroke(255, 150);
+                p.strokeWeight(1);
+                p.noFill();
+                p.beginShape();
+                for (let i = 0; i < wavePoints.length; i++) {
+                    p.curveVertex(wavePoints[i].x, wavePoints[i].y - 5);
+                }
+                p.endShape();
+            }
+
+            function updateSurfers() {
+                for (let surfer of surfers) {
+                    // Find the closest wave point
+                    let closestPoint = null;
+                    let minDist = Infinity;
+                    
+                    for (let i = 0; i < wavePoints.length; i++) {
+                        const dist = p.abs(wavePoints[i].x - surfer.x);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestPoint = wavePoints[i];
+                        }
+                    }
+                    
+                    if (closestPoint) {
+                        // Move surfer along wave
+                        surfer.x += surfer.speed;
+                        if (surfer.x > p.width + 50) {
+                            surfer.x = -50;
+                        }
+                        
+                        // Calculate angle based on surrounding wave points
+                        const idx = p.constrain(p.floor(p.map(surfer.x, 0, p.width, 0, wavePoints.length - 1)), 0, wavePoints.length - 2);
+                        const dx = wavePoints[idx + 1].x - wavePoints[idx].x;
+                        const dy = wavePoints[idx + 1].y - wavePoints[idx].y;
+                        surfer.angle = p.atan2(dy, dx);
+                        
+                        // Position surfer on wave
+                        const waveY = p.lerp(wavePoints[idx].y, wavePoints[idx + 1].y, 
+                                            p.map(surfer.x, wavePoints[idx].x, wavePoints[idx + 1].x, 0, 1));
+                        surfer.y = waveY - surfer.size * 0.7;
+                    }
+                }
+            }
+
+            function drawSurfers() {
+                for (let surfer of surfers) {
+                    p.push();
+                    p.translate(surfer.x, surfer.y);
+                    p.rotate(surfer.angle);
+                    
+                    // Surfer board
+                    p.fill(surfer.color);
+                    p.ellipse(0, 0, surfer.size * 1.8, surfer.size * 0.6);
+                    
+                    // Surfer body
+                    p.fill(255, 200, 150);
+                    p.ellipse(0, -surfer.size * 0.3, surfer.size * 0.6, surfer.size * 0.8);
+                    
+                    p.pop();
+                }
+            }
+
+            p.windowResized = () => {
+                p.resizeCanvas(p.windowWidth, p.windowHeight);
+                drawBackground(bgGradient);
+            };
+
+            p.mousePressed = () => {
+                // Create a splash effect when clicking on water
+                if (p.mouseY > p.height * 0.6) {
+                    for (let i = 0; i < wavePoints.length; i++) {
+                        const dist = p.dist(wavePoints[i].x, wavePoints[i].y, p.mouseX, p.mouseY);
+                        if (dist < 100) {
+                            const force = p.map(dist, 0, 100, -50, 0);
+                            wavePoints[i].y += force;
+                        }
+                    }
+                }
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
